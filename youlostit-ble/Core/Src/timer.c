@@ -33,7 +33,7 @@ void timer_init(TIM_TypeDef* timer)
   
   //Set Prescaler and ARR
 
-  timer->PSC = 3999;
+  timer->PSC = 7999;
 
   timer->ARR = 99;
 
