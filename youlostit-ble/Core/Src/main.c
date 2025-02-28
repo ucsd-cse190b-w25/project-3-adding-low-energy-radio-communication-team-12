@@ -30,18 +30,19 @@
 int dataAvailable = 0;
 
 // ? Global Variables
-volatile uint16_t ct = 0;
-volatile uint16_t cyc = 0;
-volatile uint16_t i50 = 0;
+// volatile uint16_t ct = 0;
+// volatile uint8_t bol = 0;
+// volatile uint8_t act = 0;
+// volatile uint16_t i50 = 0;
 
 volatile int16_t pX = 0;
 volatile int16_t pY = 0;
 volatile int16_t pZ = 0;
 
 // uint16_t *count = &ct;
-uint16_t *cycles = &cyc;
-uint16_t *inc50 = &i50;
-
+volatile uint16_t boolLost = 0;
+volatile uint16_t boolAct = 0;
+volatile uint16_t inc50 = 0;
 
 int16_t *prevX = &pX;
 int16_t *prevY = &pY;
@@ -57,15 +58,27 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI3_Init(void);
 
+int _write(int file, char *ptr, int len) {
+    int i = 0;
+    for (i = 0; i < len; i++) {
+        ITM_SendChar(*ptr++);
+    }
+    return len;
+}
+
 // ? Interupt Handler
 void TIM2_IRQHandler() {
   //increment i50
-  ((*inc50)++);
+  ((inc50)++);
 
   // 200 50ms cylces is 10 seconds
-  if(*inc50 == 200){
-    (*cycles)++;
-    *inc50 = 0;
+  if(inc50 == 1200){
+
+    boolLost = 1;
+  }
+
+  if(inc50 % 200 == 0){
+    boolAct = 1;
   }
   
   // manually reset update bit so interrupts can happen again
@@ -139,7 +152,8 @@ int main(void)
 	timer_set_ms(TIM2, 50);
 
   // ? Initalize Count
-	*cycles = 0;
+	boolLost = 0;
+  uint8_t timeLost = 0;
 
 	uint8_t b1, b2, bits;
   // ?
@@ -148,104 +162,37 @@ int main(void)
   {
 
     if (motion() == 1) {
-      *cycles = 0;
-			*inc50 = 0;
-			// leds_set((uint8_t)0);
+      boolLost = 0;
+			inc50 = 0;
+      timeLost = 0;
+			leds_set((uint8_t)0);
+      setDiscoverability(0);
+      disconnectBLE();
     }
 
-    if(cycles >= 6){
-      // ! moving
-      if(!nonDiscoverable && HAL_GPIO_ReadPin(BLE_INT_GPIO_Port,BLE_INT_Pin)){
-        catchBLE();
-      }
-      // Not moving
-      else{
-        HAL_Delay(1000);
+    // want to connect, set discoverability to 1
+    // want to disconnect, set discoverability to 0 and call disconnectble
+    
+    if(!nonDiscoverable && HAL_GPIO_ReadPin(BLE_INT_GPIO_Port,BLE_INT_Pin)){
+	    catchBLE();
+	  }
+
+    if(boolLost == 1){
+    	if(boolAct == 1){
+        setDiscoverability(1);
+        leds_set((uint8_t)3);
         // Send a string to the NORDIC UART service, remember to not include the newline
-        // unsigned char test_str[] = "PrivTag <tagname> has been missing for <N> seconds";
-        unsigned char test_str[50];
-        uint8_t secondsPassed = (*cycles - 6) * 10;
-        snprintf(test_str, sizeof(test_str), "PrivTag <Team12> missing <%d> seconds", secondsPassed);
+        // unsigned char test_str[] = "Team 12 ";
+        unsigned char test_str[18] = {0};
+        snprintf(test_str, sizeof(test_str), "T12 missing %ds", timeLost);
         updateCharValue(NORDIC_UART_SERVICE_HANDLE, READ_CHAR_HANDLE, 0, sizeof(test_str)-1, test_str);
+        timeLost += 10;
+        boolAct = 0;
+
+        // Wait for interrupt, only uncomment if low power is needed
+        //__WFI();
       }
-      // Wait for interrupt, only uncomment if low power is needed
-      //__WFI();
     }
-
-    // // enter lost mode
-    // if(*cycles >= 12){
-
-    //   if(localCount != (*count)) {
-    //     uint8_t minutes = (cyclesSaved - 12)/12;
-
-    //     // Switch case for our preamble AND PID 
-    //     switch(*count){
-    //       // Preamble Segment (0 -> 3)
-    //       case 0:
-    //         cyclesSaved = *cycles;
-    //         leds_set((uint8_t)2);
-    //         break;
-    //       case 1:
-    //         leds_set((uint8_t)1);
-    //         break;
-    //       case 2:
-    //         leds_set((uint8_t)2);
-    //         break;
-    //       case 3:
-    //         leds_set((uint8_t)1);
-    //         break;
-
-    //       // PID Segment
-    //       // 0 0 0 0 0 0 1 1 1 0 1 1 1 1 1 0
-    //       case 4:
-    //       case 5:
-    //       case 6:
-    //         leds_set((uint8_t)0);
-    //         break;
-    //       case 7:
-    //         leds_set((uint8_t)3);						
-    //         break;
-    //       case 8:
-    //         leds_set((uint8_t)2);
-    //         break;
-    //       case 9:
-    //         leds_set((uint8_t)3);
-    //         break;
-    //       case 10:
-    //         leds_set((uint8_t)3);
-    //         break;
-    //       case 11:
-    //         leds_set((uint8_t)2);
-    //         break;
-    //       case 12:
-    //         // Minutes Segment
-    //           b2 = (minutes & (1 << 7)) >> 6;
-    //         b1 = (minutes & (1 << 6)) >> 6;
-    //         bits = b2 | b1;
-    //         leds_set(bits);
-    //         break;
-    //       case 13:
-    //         b2 = (minutes & (1 << 5)) >> 4;
-    //         b1 = (minutes & (1 << 4)) >> 4;
-    //         bits = b2 | b1;
-    //         leds_set((uint8_t)bits);
-    //         break;
-    //       case 14:
-    //         b2 = (minutes & (1 << 3)) >> 2;
-    //         b1 = (minutes & (1 << 2)) >> 2;
-    //         bits = b2 | b1;
-    //         leds_set((uint8_t)bits);
-    //         break;
-    //       case 15:
-    //         b2 = (minutes & (1 << 1));
-    //         b1 = (minutes & (1));
-    //         bits = b2 | b1;
-    //         leds_set((uint8_t)bits);
-    //         break;
-    //     }
-    //     localCount = *count;
-    //   }
-    // }
   }
 }
 
