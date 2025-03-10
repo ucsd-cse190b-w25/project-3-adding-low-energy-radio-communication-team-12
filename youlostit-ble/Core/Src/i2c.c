@@ -78,3 +78,6 @@ uint8_t i2c_transaction(uint8_t address, uint8_t dir, uint8_t* data, uint8_t len
 
     return 0; // Success
 }
+
+
+

@@ -27,6 +27,8 @@
 #include <i2c.h>
 #include <leds.h>
 
+#define LSM6DSL_ADDR 0x6A // I2C address of the LSM6DSL accelerometer
+
 int dataAvailable = 0;
 
 // ? Global Variables
@@ -42,7 +44,7 @@ volatile int16_t pZ = 0;
 // uint16_t *count = &ct;
 volatile uint16_t boolLost = 0;
 volatile uint16_t boolAct = 0;
-volatile uint16_t inc50 = 0;
+volatile uint16_t incTenSeconds = 0;
 
 int16_t *prevX = &pX;
 int16_t *prevY = &pY;
@@ -66,20 +68,38 @@ int _write(int file, char *ptr, int len) {
     return len;
 }
 
+void EXTI9_5_IRQHandler() {
+  
+  if (__HAL_GPIO_EXTI_GET_IT(LSM6DSL_INT1_Pin) != RESET) {
+      
+    __HAL_GPIO_EXTI_CLEAR_IT(LSM6DSL_INT1_Pin);
+
+      // Read the STATUS register to clear the interrupt flag inside the LSM6DSL
+      uint8_t status;
+      i2c_transaction(LSM6DSL_ADDR, 1, &status, 1);  // Read from STATUS_REG
+
+      // Motion detected, reset lost timer
+      boolLost = 0;
+      inc50 = 0;
+      timeLost = 0;
+
+      // Optional: Indicate motion detected
+      leds_set((uint8_t)1);
+  }
+}
+
+
 // ? Interupt Handler
 void TIM2_IRQHandler() {
   //increment i50
-  ((inc50)++);
+  ((incTenSeconds)++);
 
-  // 200 50ms cylces is 10 seconds
-  if(inc50 == 1200){
+  if (incTenSeconds == 6) {
 
     boolLost = 1;
   }
 
-  if(inc50 % 200 == 0){
-    boolAct = 1;
-  }
+  boolAct = 1;
   
   // manually reset update bit so interrupts can happen again
   TIM2->SR &= ~TIM_SR_UIF;
@@ -149,7 +169,7 @@ int main(void)
 
 	i2c_init();
 	lsm6dsl_init();	
-	timer_set_ms(TIM2, 50);
+	timer_set_ms(TIM2, 10000);
 
   // ? Initalize Count
 	boolLost = 0;
@@ -158,13 +178,15 @@ int main(void)
 	uint8_t b1, b2, bits;
   // ?
 
+  // ! REMOVE LEDS WHEN DONE
   while (1)
   {
 
     if (motion() == 1) {
       boolLost = 0;
-			inc50 = 0;
+			incTenSeconds = 0;
       timeLost = 0;
+      timer_reset(TIM2);
 			leds_set((uint8_t)0);
       setDiscoverability(0);
       disconnectBLE();
@@ -188,11 +210,13 @@ int main(void)
         updateCharValue(NORDIC_UART_SERVICE_HANDLE, READ_CHAR_HANDLE, 0, sizeof(test_str)-1, test_str);
         timeLost += 10;
         boolAct = 0;
-
-        // Wait for interrupt, only uncomment if low power is needed
-        //__WFI();
       }
     }
+
+    // Enter Stop Mode, then wait for interrupt
+    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    // Wait for interrupt, only uncomment if low power is needed
+    __WFI();
   }
 }
 
@@ -220,7 +244,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
   // This lines changes system clock frequency
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_7;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_4;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -373,3 +397,17 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
+void setupGPIOInterrupt() {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  // Configure GPIO as input with external interrupt (falling edge)
+  GPIO_InitStruct.Pin = LSM6DSL_INT1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(LSM6DSL_INT1_GPIO_Port, &GPIO_InitStruct);
+
+  // Enable NVIC interrupt
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+}

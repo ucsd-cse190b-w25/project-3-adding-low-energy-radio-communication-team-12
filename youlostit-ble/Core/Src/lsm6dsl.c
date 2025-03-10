@@ -7,6 +7,9 @@
 
 #define OUTX_L_XL 0x28    // Output register for X-axis acceleration (low byte)
 
+#define WAKE_UP_THS 0x5B  //Wake up THS
+#define MD1_CFG 0x5E      //MD1_CFG
+
 // #define OUTX_H_XL 0x29    // Output register for X-axis acceleration (high byte)
 // #define OUTY_L_XL 0x2A    // Output register for Y-axis acceleration (low byte)
 // #define OUTY_H_XL 0x2B    // Output register for Y-axis acceleration (high byte)
@@ -19,9 +22,9 @@
 void lsm6dsl_init() {
     uint8_t data[2];
 
-    // Configure accelerometer: 416 Hz, High-Performance mode
+    // Configure accelerometer: 104 Hz, Normal-Power mode
     data[0] = CTRL1_XL;  // Register address
-    data[1] = 0x60;       // Configuration value
+    data[1] = 0x40;       // Configuration value
     i2c_transaction(LSM6DSL_ADDR, write, data, 2); // Send register address + data
     
     // Enable accelerometer data-ready interrupt on INT1
@@ -48,4 +51,18 @@ void lsm6dsl_read_xyz(int16_t* x, int16_t* y, int16_t* z) {
     *x = (int16_t)((data[1] << 8) | data[0]);
     *y = (int16_t)((data[3] << 8) | data[2]);
     *z = (int16_t)((data[5] << 8) | data[4]);
+}
+
+void setupMotionInterrupt() {
+    uint8_t data[2];
+
+    // Set Wake-Up threshold (adjust sensitivity)
+    data[0] = WAKE_UP_THS;  // Register address
+    data[1] = 0x02;       // Configuration value
+    i2c_transaction(LSM6DSL_ADDR, 0, &data, 2);  // Write to WAKE_UP_THS
+
+    // Enable Wake-Up interrupt and route it to INT1
+    data[0] = MD1_CFG;      // Register address
+    data[1] = 0x20;         // Configuration value
+    i2c_transaction(LSM6DSL_ADDR, 0, &data, 1);  // Write to MD1_CFG
 }
