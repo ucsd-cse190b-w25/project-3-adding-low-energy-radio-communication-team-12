@@ -2013,11 +2013,11 @@ void TIM2_IRQHandler() {
  8000e96:	4b0d      	ldr	r3, [pc, #52]	@ (8000ecc <TIM2_IRQHandler+0x44>)
  8000e98:	801a      	strh	r2, [r3, #0]
 
-  if (incTenSeconds == 2) {
+  if (incTenSeconds == 6) {
  8000e9a:	4b0c      	ldr	r3, [pc, #48]	@ (8000ecc <TIM2_IRQHandler+0x44>)
  8000e9c:	881b      	ldrh	r3, [r3, #0]
  8000e9e:	b29b      	uxth	r3, r3
- 8000ea0:	2b02      	cmp	r3, #2
+ 8000ea0:	2b06      	cmp	r3, #6
  8000ea2:	d102      	bne.n	8000eaa <TIM2_IRQHandler+0x22>
 
     boolLost = 1;

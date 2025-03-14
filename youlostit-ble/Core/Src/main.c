@@ -102,7 +102,7 @@ void TIM2_IRQHandler() {
   //increment i50
   ((incTenSeconds)++);
 
-  if (incTenSeconds == 2) {
+  if (incTenSeconds == 6) {
 
     boolLost = 1;
   }
