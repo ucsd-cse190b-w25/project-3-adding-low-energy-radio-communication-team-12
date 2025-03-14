@@ -7,6 +7,7 @@
 
 #define OUTX_L_XL 0x28    // Output register for X-axis acceleration (low byte)
 
+#define WAKE_UP_DUR  0x5C  // Wake-Up duration register address
 #define WAKE_UP_THS 0x5B  //Wake up THS
 #define MD1_CFG 0x5E      //MD1_CFG
 
@@ -27,10 +28,10 @@ void lsm6dsl_init() {
     data[1] = 0x40;       // Configuration value
     i2c_transaction(LSM6DSL_ADDR, write, data, 2); // Send register address + data
     
-    // Enable accelerometer data-ready interrupt on INT1
-    data[0] = INT1_CTRL;  // Register address
-    data[1] = 0x01;       // Enable data-ready interrupt
-    i2c_transaction(LSM6DSL_ADDR, write, data, 2); // Send register address + data
+    // // Enable accelerometer data-ready interrupt on INT1
+    // data[0] = INT1_CTRL;  // Register address
+    // data[1] = 0x01;       // Enable data-ready interrupt
+    // i2c_transaction(LSM6DSL_ADDR, write, data, 2); // Send register address + data
 }
 
 void lsm6dsl_read_xyz(int16_t* x, int16_t* y, int16_t* z) {
@@ -58,11 +59,17 @@ void setupMotionInterrupt() {
 
     // Set Wake-Up threshold (adjust sensitivity)
     data[0] = WAKE_UP_THS;  // Register address
-    data[1] = 0x00;       // Configuration value
+    data[1] = 0x01;         // Threshold value (adjust as needed)
     i2c_transaction(LSM6DSL_ADDR, 0, &data, 2);  // Write to WAKE_UP_THS
+
+    // Set Wake-Up duration (ensure motion is sustained for a minimal time)
+    data[0] = WAKE_UP_DUR;  // Register address
+    data[1] = 0x02;         // Duration value (0x02 for minimal duration; adjust as needed)
+    i2c_transaction(LSM6DSL_ADDR, 0, &data, 2);  // Write to WAKE_UP_DUR
 
     // Enable Wake-Up interrupt and route it to INT1
     data[0] = MD1_CFG;      // Register address
-    data[1] = 0x20;         // Configuration value
-    i2c_transaction(LSM6DSL_ADDR, 0, &data, 1);  // Write to MD1_CFG
+    data[1] = 0x20;         // Configuration value to enable the wake-up interrupt
+    i2c_transaction(LSM6DSL_ADDR, 0, &data, 2);  // Write to MD1_CFG
 }
+

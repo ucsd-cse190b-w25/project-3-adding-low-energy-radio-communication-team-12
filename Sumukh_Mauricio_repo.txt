@@ -1,1 +1,4 @@
 https://github.com/ucsd-cse190b-w25/project-3-adding-low-energy-radio-communication-team-12
+
+
+standby ble after setdiscoverability 0

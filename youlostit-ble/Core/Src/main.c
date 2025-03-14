@@ -28,6 +28,10 @@
 #include <leds.h>
 
 #define LSM6DSL_ADDR 0x6A // I2C address of the LSM6DSL accelerometer
+#define WAKE_UP_SRC 0x1B  // Wake_up_src
+#define WAKE_UP_SRC_Msk 0x08 // mask for reading relevant bit
+#define write 0
+#define read 1
 
 int dataAvailable = 0;
 
@@ -71,27 +75,26 @@ int _write(int file, char *ptr, int len) {
     return len;
 }
 
-void EXTI15_10_IRQHandler(void) {
+// void EXTI15_10_IRQHandler(void) {
   
-  if (__HAL_GPIO_EXTI_GET_IT(LSM6DSL_Pin) != RESET) {
+  // if (__HAL_GPIO_EXTI_GET_IT(LSM6DSL_Pin) != RESET) {
       
-    __HAL_GPIO_EXTI_CLEAR_IT(LSM6DSL_Pin);
+  //   __HAL_GPIO_EXTI_CLEAR_IT(LSM6DSL_Pin);
 
-      // Read the STATUS register to clear the interrupt flag inside the LSM6DSL
-      uint8_t status;
-      i2c_transaction(LSM6DSL_ADDR, 1, &status, 1);  // Read from STATUS_REG
+  //   // Read the STATUS register to clear the interrupt flag inside the LSM6DSL
+  //   uint8_t status;
+  //   i2c_transaction(LSM6DSL_ADDR, 1, &status, 1);  // Read from STATUS_REG
 
-      boolLost = 0;
-			incTenSeconds = 0;
-      timeLost = 0;
-      timer_reset(TIM2);
-			leds_set((uint8_t)2);
-      setDiscoverability(0);
-      disconnectBLE();
-  }
-
-  
-}
+  //   boolLost = 0;
+  //   incTenSeconds = 0;
+  //   timeLost = 0;
+  //   timer_reset(TIM2);
+  //   leds_set((uint8_t)2);
+  //   setDiscoverability(0);
+    // disconnectBLE();
+    // standbyBle();
+  // }
+// }
 
 
 // ? Interupt Handler
@@ -110,6 +113,24 @@ void TIM2_IRQHandler() {
   TIM2->SR &= ~TIM_SR_UIF;
 }
 // ?
+
+// void LPTIM1_IRQHandler(void) {
+//   // Check if the Compare Match interrupt flag is set
+//   if (LPTIM1->ISR & LPTIM_ISR_CMPM) {
+//     // Clear the Compare Match flag by writing to the Interrupt Clear Register
+//     LPTIM1->ICR = LPTIM_ICR_CMPMCF;
+
+//     // Increment our counter
+//     incTenSeconds++;
+
+//     if (incTenSeconds == 2) {
+//       boolLost = 1;
+//     }
+
+//     boolAct = 1;
+//   }
+// }
+
 
 // ? Motion function
 int motion() {
@@ -161,7 +182,7 @@ int main(void)
   HAL_GPIO_WritePin(BLE_RESET_GPIO_Port,BLE_RESET_Pin,GPIO_PIN_SET);
 
   ble_init();
-
+  standbyBle();
   HAL_Delay(10);
 
   uint8_t nonDiscoverable = 0;
@@ -170,12 +191,11 @@ int main(void)
   // ? OldMain initalization
 
   leds_init();
-	timer_init(TIM2);
-
+	// timer_init(TIM2);
+  timer_init(TIM2);
 	i2c_init();
 	lsm6dsl_init();	
-  setupMotionInterrupt();
-  setupGPIOInterrupt();
+  // setupMotionInterrupt();
   timer_reset(TIM2);
 	//timer_set_ms(TIM2, 10000);
 
@@ -190,15 +210,16 @@ int main(void)
   while (1)
   {
 
-    // if (motion() == 1) {
-    //   boolLost = 0;
-		// 	incTenSeconds = 0;
-    //   timeLost = 0;
-    //   timer_reset(TIM2);
-		// 	leds_set((uint8_t)0);
-    //   setDiscoverability(0);
-    //   disconnectBLE();
-    // }
+    if (motion() == 1) {
+      boolLost = 0;
+			incTenSeconds = 0;
+      timeLost = 0;
+      timer_reset(TIM2);
+			// leds_set((uint8_t)0);
+      setDiscoverability(0);
+      disconnectBLE();
+      standbyBle();
+    }
 
     // want to connect, set discoverability to 1
     // want to disconnect, set discoverability to 0 and call disconnectble
@@ -207,10 +228,32 @@ int main(void)
 	    catchBLE();
 	  }
 
+    
+  
+    // // Read the register to clear the interrupt flag inside the LSM6DSL
+    // uint8_t data[1];
+
+    // uint8_t reg = WAKE_UP_SRC;
+    // i2c_transaction(LSM6DSL_ADDR, write, &reg, 1);
+    // i2c_transaction(LSM6DSL_ADDR, read, data, 1);
+
+
+    // if (data[0] & 0x0F) {
+
+    //   boolLost = 0;
+    //   incTenSeconds = 0;
+    //   timeLost = 0;
+    //   timer_reset(TIM2);
+    //   leds_set((uint8_t)2);
+    //   // setDiscoverability(0);
+    //   // disconnectBLE();
+    // }
+  
+
     if(boolLost == 1){
     	if(boolAct == 1){
         setDiscoverability(1);
-        leds_set((uint8_t)3);
+        // leds_set((uint8_t)3);
         // Send a string to the NORDIC UART service, remember to not include the newline
         // unsigned char test_str[] = "Team 12 ";
         unsigned char test_str[18] = {0};
@@ -222,9 +265,22 @@ int main(void)
     }
 
     // Enter Stop Mode, then wait for interrupt
-    // HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    HAL_SuspendTick();
+    __HAL_RCC_GPIOE_CLK_DISABLE();
+    __HAL_RCC_GPIOA_CLK_DISABLE();
+    __HAL_RCC_GPIOB_CLK_DISABLE();
+    __HAL_RCC_GPIOD_CLK_DISABLE();
+    __HAL_RCC_GPIOC_CLK_DISABLE();
+    RCC->APB1ENR1 &= ~RCC_APB1ENR1_I2C2EN;  
+    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    HAL_ResumeTick();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    i2c_init();
     // Wait for interrupt, only uncomment if low power is needed
-    // HAL_SuspendTick();
     // __WFI();
   }
 }
@@ -241,7 +297,7 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -253,7 +309,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
   // This lines changes system clock frequency
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_7;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_4;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -407,24 +463,24 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 
-void setupGPIOInterrupt() {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
+// void setupGPIOInterrupt() {
+//   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-  // Configure GPIO as input with external interrupt (falling edge)
-  GPIO_InitStruct.Pin = LSM6DSL_Pin;
-  // Original
-  // GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  // Newly Suggested
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  // Original
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  // Newly Suggested
-  // GPIO_InitStruct.Pull = GPIO_PULLUP;
+//   // Configure GPIO as input with external interrupt (falling edge)
+//   GPIO_InitStruct.Pin = LSM6DSL_Pin;
+//   // Original
+//   // GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+//   // Newly Suggested
+//   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+//   // Original
+//   GPIO_InitStruct.Pull = GPIO_NOPULL;
+//   // Newly Suggested
+//   // GPIO_InitStruct.Pull = GPIO_PULLUP;
 
-  HAL_GPIO_Init(LSM6DSL_Port, &GPIO_InitStruct);
+//   HAL_GPIO_Init(LSM6DSL_Port, &GPIO_InitStruct);
 
-  // Enable NVIC interrupt
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+//   // Enable NVIC interrupt
+//   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+//   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
   
-}
+// }
