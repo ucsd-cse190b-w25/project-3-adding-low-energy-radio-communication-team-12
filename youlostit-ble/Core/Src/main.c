@@ -44,13 +44,15 @@ volatile int16_t pZ = 0;
 // uint16_t *count = &ct;
 volatile uint16_t boolLost = 0;
 volatile uint16_t boolAct = 0;
-volatile uint16_t incTenSeconds = 0;
+// BRUTE FORCE HOWEVER COULD COME BACKTO FIX
+volatile uint16_t incTenSeconds = -1;
 
 int16_t *prevX = &pX;
 int16_t *prevY = &pY;
 int16_t *prevZ = &pZ;
 
 uint8_t cyclesSaved = 0;
+volatile uint8_t timeLost = 0;
 // ?
 
 
@@ -58,6 +60,7 @@ SPI_HandleTypeDef hspi3;
 
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+void setupGPIOInterrupt();
 static void MX_SPI3_Init(void);
 
 int _write(int file, char *ptr, int len) {
@@ -68,24 +71,26 @@ int _write(int file, char *ptr, int len) {
     return len;
 }
 
-void EXTI9_5_IRQHandler() {
+void EXTI15_10_IRQHandler(void) {
   
-  if (__HAL_GPIO_EXTI_GET_IT(LSM6DSL_INT1_Pin) != RESET) {
+  if (__HAL_GPIO_EXTI_GET_IT(LSM6DSL_Pin) != RESET) {
       
-    __HAL_GPIO_EXTI_CLEAR_IT(LSM6DSL_INT1_Pin);
+    __HAL_GPIO_EXTI_CLEAR_IT(LSM6DSL_Pin);
 
       // Read the STATUS register to clear the interrupt flag inside the LSM6DSL
       uint8_t status;
       i2c_transaction(LSM6DSL_ADDR, 1, &status, 1);  // Read from STATUS_REG
 
-      // Motion detected, reset lost timer
       boolLost = 0;
-      inc50 = 0;
+			incTenSeconds = 0;
       timeLost = 0;
-
-      // Optional: Indicate motion detected
-      leds_set((uint8_t)1);
+      timer_reset(TIM2);
+			leds_set((uint8_t)2);
+      setDiscoverability(0);
+      disconnectBLE();
   }
+
+  
 }
 
 
@@ -94,7 +99,7 @@ void TIM2_IRQHandler() {
   //increment i50
   ((incTenSeconds)++);
 
-  if (incTenSeconds == 6) {
+  if (incTenSeconds == 2) {
 
     boolLost = 1;
   }
@@ -169,11 +174,14 @@ int main(void)
 
 	i2c_init();
 	lsm6dsl_init();	
-	timer_set_ms(TIM2, 10000);
+  setupMotionInterrupt();
+  setupGPIOInterrupt();
+  timer_reset(TIM2);
+	//timer_set_ms(TIM2, 10000);
 
   // ? Initalize Count
 	boolLost = 0;
-  uint8_t timeLost = 0;
+  timeLost = 0;
 
 	uint8_t b1, b2, bits;
   // ?
@@ -182,15 +190,15 @@ int main(void)
   while (1)
   {
 
-    if (motion() == 1) {
-      boolLost = 0;
-			incTenSeconds = 0;
-      timeLost = 0;
-      timer_reset(TIM2);
-			leds_set((uint8_t)0);
-      setDiscoverability(0);
-      disconnectBLE();
-    }
+    // if (motion() == 1) {
+    //   boolLost = 0;
+		// 	incTenSeconds = 0;
+    //   timeLost = 0;
+    //   timer_reset(TIM2);
+		// 	leds_set((uint8_t)0);
+    //   setDiscoverability(0);
+    //   disconnectBLE();
+    // }
 
     // want to connect, set discoverability to 1
     // want to disconnect, set discoverability to 0 and call disconnectble
@@ -214,9 +222,10 @@ int main(void)
     }
 
     // Enter Stop Mode, then wait for interrupt
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+    // HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
     // Wait for interrupt, only uncomment if low power is needed
-    __WFI();
+    // HAL_SuspendTick();
+    // __WFI();
   }
 }
 
@@ -244,7 +253,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
   // This lines changes system clock frequency
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_4;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_7;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -402,12 +411,20 @@ void setupGPIOInterrupt() {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   // Configure GPIO as input with external interrupt (falling edge)
-  GPIO_InitStruct.Pin = LSM6DSL_INT1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pin = LSM6DSL_Pin;
+  // Original
+  // GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  // Newly Suggested
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  // Original
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(LSM6DSL_INT1_GPIO_Port, &GPIO_InitStruct);
+  // Newly Suggested
+  // GPIO_InitStruct.Pull = GPIO_PULLUP;
+
+  HAL_GPIO_Init(LSM6DSL_Port, &GPIO_InitStruct);
 
   // Enable NVIC interrupt
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+  
 }

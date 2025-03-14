@@ -1,4 +1,7 @@
--High Performance mode to Normal mode
+-High Performance mode to Normal mode accelerometer
     -Set to normal power mode, write to 3rd bit - XML_HM_MODE (CTRL6_C) needs to be set to 1
 -Clock speed to less than 1Mhz
 -SetupMotionInterupt, need to test Configuration threshold
+
+-system clock: low power
+-turn off systick

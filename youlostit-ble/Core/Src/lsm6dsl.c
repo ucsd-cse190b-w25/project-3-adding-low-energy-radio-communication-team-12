@@ -58,7 +58,7 @@ void setupMotionInterrupt() {
 
     // Set Wake-Up threshold (adjust sensitivity)
     data[0] = WAKE_UP_THS;  // Register address
-    data[1] = 0x02;       // Configuration value
+    data[1] = 0x00;       // Configuration value
     i2c_transaction(LSM6DSL_ADDR, 0, &data, 2);  // Write to WAKE_UP_THS
 
     // Enable Wake-Up interrupt and route it to INT1

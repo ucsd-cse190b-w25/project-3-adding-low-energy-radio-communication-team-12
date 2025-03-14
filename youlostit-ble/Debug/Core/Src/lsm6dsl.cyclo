@@ -1,0 +1,3 @@
+../Core/Src/lsm6dsl.c:22:6:lsm6dsl_init	1
+../Core/Src/lsm6dsl.c:36:6:lsm6dsl_read_xyz	1
+../Core/Src/lsm6dsl.c:56:6:setupMotionInterrupt	1

@@ -73,7 +73,8 @@ void Error_Handler(void);
 #define BLE_RESET_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-
+#define LSM6DSL_Port GPIOD
+#define LSM6DSL_Pin GPIO_PIN_11
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

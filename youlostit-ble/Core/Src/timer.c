@@ -33,9 +33,9 @@ void timer_init(TIM_TypeDef* timer)
   
   //Set Prescaler and ARR
 
-  timer->PSC = 999;
+  timer->PSC = 7999;
 
-  timer->ARR = 99;
+  timer->ARR = 9999;
 
   //Start Counter
   timer->CR1 |= TIM_CR1_CEN;
